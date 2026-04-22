@@ -12,9 +12,20 @@ class KitchenReceiver(Node):
             10)
 
     def listener_callback(self, msg):
-        item = msg.data[0]
+        item_num = msg.data[0]
         qty = msg.data[1]
-        self.get_logger().info(f'ORDER RECEIVED: Item #{item}, Quantity: {qty}')
+        if item_num == 5:
+            return
+        else:
+            if item_num == 1:
+                item = "Water"
+            elif item_num == 2:
+                item = "Burger"
+            elif item_num == 3:
+                item = "Fries"
+            elif item_num == 4:
+                item = "Shake"
+            self.get_logger().info(f'ORDER RECEIVED: {qty} {item.lower()}')
 
 def main(args=None):
     rclpy.init(args=args)
