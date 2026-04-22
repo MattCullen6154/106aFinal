@@ -2,7 +2,7 @@ import os
 import time
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32MultiArray
 import threading
 
 GOLD = "\033[1;33m"
@@ -30,11 +30,11 @@ def print_menu():
 class Order(Node):
     def __init__(self):
         super().__init__('order_node')
-        self.publisher_ = self.create_publisher(Int32, 'orders', 10)
+        self.publisher_ = self.create_publisher(Int32MultiArray, 'orders', 10)
 
-    def publish_text(self, menu_item):
-        msg = Int32()
-        msg.data = menu_item
+    def publish_text(self, item, qty):
+        msg = Int32MultiArray()
+        msg.data = [item, qty]
         self.publisher_.publish(msg)
 
 def main(args=None):
@@ -47,12 +47,14 @@ def main(args=None):
     try:
         os.system('cls' if os.name == 'nt' else 'clear')
         print_menu()
-        user_input = int(input(f"{GREEN}Enter the number for the menu item you want: {RESET}"))
-        node.publish_text(user_input)
-        if user_input == 5:
+        item = int(input(f"{GREEN}Enter the number for the menu item you want: {RESET}"))
+        if item == 5:
             print(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Thank you for visiting! I hope you enjoyed your meal. Goodbye.\"\n")
+            qty = 0
         else:
-            print(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Excellent choice! I'll get that for you right away.\"\n")
+            qty = int(input(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Excellent choice! How many\": "))
+            print(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Great! I'll get that for you right away.\"\n")
+        node.publish_text(item, qty)
         time.sleep(3)
     except KeyboardInterrupt:
         pass
