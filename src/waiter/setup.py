@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "order_node = waiter.order_node:main"
+            "order_node = waiter.order_node:main",
+            "kitchen_node = waiter.kitchen_node:main",
         ],
     },
 )
