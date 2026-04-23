@@ -48,7 +48,7 @@ class YoloPerceptionNode(Node):
             self.get_logger().error(f"CvBridge Error: {e}")
             return
 
-        # Run YOLO inference
+        # Perform YOLO detection. verbose=False stops the model from printing to console every frame.
         results = self.model.predict(cv_image, classes=self.target_classes, verbose=False)
         
         # Initialize default state
