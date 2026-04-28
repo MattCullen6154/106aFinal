@@ -25,14 +25,14 @@ class WaypointPosePublisher(Node):
         self.frame_id = self.get_parameter("frame_id").value
         self.topic_prefix = self.get_parameter("topic_prefix").value.rstrip("/")
 
-        self.publishers = {}
-        self.messages = {}
+        self.waypoint_publishers = {}
+        self.waypoint_messages = {}
         self._load_waypoint_messages()
         self.create_timer(float(self.get_parameter("publish_period").value), self.publish_waypoints)
 
         self.get_logger().info(
             "WaypointPosePublisher: publishing %d waypoints from '%s'"
-            % (len(self.messages), self.waypoints_yaml)
+            % (len(self.waypoint_messages), self.waypoints_yaml)
         )
 
     def _load_waypoint_messages(self):
@@ -54,14 +54,14 @@ class WaypointPosePublisher(Node):
                 msg.pose.orientation.z = waypoint.quaternion[2]
                 msg.pose.orientation.w = waypoint.quaternion[3]
 
-            self.publishers[name] = publisher
-            self.messages[name] = msg
+            self.waypoint_publishers[name] = publisher
+            self.waypoint_messages[name] = msg
 
     def publish_waypoints(self):
         now = self.get_clock().now().to_msg()
-        for name, msg in self.messages.items():
+        for name, msg in self.waypoint_messages.items():
             msg.header.stamp = now
-            self.publishers[name].publish(msg)
+            self.waypoint_publishers[name].publish(msg)
 
 
 def main(args=None):
