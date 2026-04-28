@@ -1,23 +1,25 @@
 import argparse
-from pathlib import Path
-from ament_index_python.packages import get_package_share_directory
 import os
+
+from ament_index_python.packages import get_package_share_directory
 
 from .planner import astar, build_planner, path_to_world, simplify_path, snap_to_nearest_free, world_to_coarse_cell
 
 
 def main():
+    package_share = get_package_share_directory("slam")
+
     parser = argparse.ArgumentParser(description="Plan a coarse A* path between named map waypoints.")
     parser.add_argument("start", help="Start waypoint name")
     parser.add_argument("goal", help="Goal waypoint name")
     parser.add_argument(
         "--map-yaml",
-        default=os.path.join(get_package_share_directory('slam'), 'maps', 'restaurant_map.yaml'),#str(Path(__file__).resolve().parent.parent / "maps" / "restaurant_map.yaml"),
+        default=os.path.join(package_share, "maps", "restaurant_map.yaml"),
         help="Path to the saved ROS map YAML",
     )
     parser.add_argument(
         "--waypoints",
-        default=str(Path(__file__).resolve().parent.parent / "config" / "waypoints.yaml"),
+        default=os.path.join(package_share, "config", "waypoints.yaml"),
         help="Path to the waypoint YAML",
     )
     parser.add_argument("--block-size", type=int, default=4, help="Number of fine map cells per coarse planning cell")
