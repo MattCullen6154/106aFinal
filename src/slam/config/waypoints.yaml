@@ -1,0 +1,12 @@
+waypoints:
+  recycle_bin:
+    x: -0.179
+    y: -3.728
+    yaw: 2.026
+    quaternion: [0.0, 0.0, 0.849, 0.529]
+
+  alice_corner:
+    x: 4.364
+    y: 1.124
+    yaw: -2.052
+    quaternion: [0.0, 0.0, -0.855, 0.518]

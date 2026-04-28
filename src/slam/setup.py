@@ -16,7 +16,7 @@ setup(
         (os.path.join("share", package_name, "config"), glob("config/*.yaml")),
         (os.path.join("share", package_name, "maps"), glob("maps/*")),
     ],
-    install_requires=["setuptools", "numpy"],
+    install_requires=["setuptools", "numpy", "PyYAML"],
     zip_safe=True,
     maintainer="Matt Cullen",
     maintainer_email="matthew_cullen@berkeley.edu",
@@ -25,6 +25,7 @@ setup(
     entry_points={
         "console_scripts": [
             "slam_node = slam.slam_node:main",
+            "plan_path = slam.plan_path:main",
         ],
     },
 )
