@@ -27,6 +27,7 @@ setup(
             "slam_node = slam.slam_node:main",
             "plan_path = slam.plan_path:main",
             "path_publisher = slam.path_publisher:main",
+            "coarse_map_publisher = slam.coarse_map_publisher:main",
         ],
     },
 )
