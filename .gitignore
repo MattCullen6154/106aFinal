@@ -42,4 +42,6 @@ Thumbs.db
 # Large Data / Bag files
 *.mcap
 *.db3
-*.bag
+*.bag.env
+ssh-key-final.txt
+.env

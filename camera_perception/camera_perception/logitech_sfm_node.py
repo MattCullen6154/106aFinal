@@ -23,9 +23,9 @@ class LogitechSFMNode(Node):
             self.get_logger().error(f"Cannot open webcam at {self.video_device}")
             return
             
-        # Logitech C920 / Standard Webcam Intrinsic Camera Matrix (K)
-        self.K = np.array([[800.0, 0.0, 320.0],
-                           [0.0, 800.0, 240.0],
+        # Logitech C922 / Standard Webcam Intrinsic Camera Matrix (K)
+        self.K = np.array([[1420.0, 0.0, 960.0],
+                           [0.0, 1420.0, 540.0],
                            [0.0, 0.0, 1.0]])
         
         # SfM Variables
