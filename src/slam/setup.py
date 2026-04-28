@@ -28,6 +28,7 @@ setup(
             "plan_path = slam.plan_path:main",
             "path_publisher = slam.path_publisher:main",
             "coarse_map_publisher = slam.coarse_map_publisher:main",
+            "waypoint_pose_publisher = slam.waypoint_pose_publisher:main",
         ],
     },
 )
