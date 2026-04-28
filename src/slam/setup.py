@@ -26,6 +26,7 @@ setup(
         "console_scripts": [
             "slam_node = slam.slam_node:main",
             "plan_path = slam.plan_path:main",
+            "path_publisher = slam.path_publisher:main",
         ],
     },
 )
