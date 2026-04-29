@@ -1,13 +1,20 @@
-import argparse
 import os
+import argparse
+from pathlib import Path
 
-from ament_index_python.packages import get_package_share_directory
+try:
+    from ament_index_python.packages import get_package_share_directory
+except ImportError:
+    get_package_share_directory = None
 
 from .planner import astar, build_planner, path_to_world, simplify_path, snap_to_nearest_free, world_to_coarse_cell
 
 
 def main():
-    package_share = get_package_share_directory("slam")
+    if get_package_share_directory is None:
+        package_share = Path(__file__).resolve().parents[1]
+    else:
+        package_share = Path(get_package_share_directory("slam"))
 
     parser = argparse.ArgumentParser(description="Plan a coarse A* path between named map waypoints.")
     parser.add_argument("start", help="Start waypoint name")
@@ -22,7 +29,7 @@ def main():
         default=os.path.join(package_share, "config", "waypoints.yaml"),
         help="Path to the waypoint YAML",
     )
-    parser.add_argument("--block-size", type=int, default=4, help="Number of fine map cells per coarse planning cell")
+    parser.add_argument("--block-size", type=int, default=1, help="Number of fine map cells per planning cell")
     parser.add_argument(
         "--inflation-radius",
         type=float,
@@ -62,3 +69,7 @@ def main():
     print("World-frame path:")
     for index, (x_coord, y_coord) in enumerate(world_path):
         print(f"  {index:02d}: x={x_coord:.3f}, y={y_coord:.3f}")
+
+
+if __name__ == "__main__":
+    main()

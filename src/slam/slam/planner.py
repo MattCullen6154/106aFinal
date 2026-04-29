@@ -59,9 +59,11 @@ def load_waypoints(yaml_path):
 def inflate_grid(grid, inflation_radius_m, resolution):
     radius_cells = int(math.ceil(inflation_radius_m / resolution))
     if radius_cells <= 0:
-        return np.where(grid == 0, 0, 1).astype(np.int8)
+        return np.where(grid == 1, 1, 0).astype(np.int8)
 
-    blocked = (grid == 1) | (grid == -1)
+    # Only inflate known occupied cells. Treating unknown cells as obstacles here
+    # can erase narrow restaurant aisles before the planner ever runs.
+    blocked = grid == 1
     inflated = blocked.copy()
 
     occupied_rows, occupied_cols = np.nonzero(blocked)
@@ -84,23 +86,26 @@ def inflate_grid(grid, inflation_radius_m, resolution):
     return inflated.astype(np.int8)
 
 
-def coarsen_grid(grid, block_size):
+def coarsen_grid(grid, block_size, occupied_fraction_threshold=0.25):
     if block_size <= 0:
         raise ValueError("block_size must be positive")
+    if not (0.0 < occupied_fraction_threshold <= 1.0):
+        raise ValueError("occupied_fraction_threshold must be in (0.0, 1.0]")
 
     height, width = grid.shape
-    coarse_height = height // block_size
-    coarse_width = width // block_size
+    coarse_height = int(math.ceil(height / block_size))
+    coarse_width = int(math.ceil(width / block_size))
     coarse = np.ones((coarse_height, coarse_width), dtype=np.int8)
 
     for coarse_row in range(coarse_height):
         row_start = coarse_row * block_size
-        row_end = row_start + block_size
+        row_end = min(height, row_start + block_size)
         for coarse_col in range(coarse_width):
             col_start = coarse_col * block_size
-            col_end = col_start + block_size
+            col_end = min(width, col_start + block_size)
             block = grid[row_start:row_end, col_start:col_end]
-            coarse[coarse_row, coarse_col] = 1 if np.any(block != 0) else 0
+            occupied_fraction = np.count_nonzero(block != 0) / block.size
+            coarse[coarse_row, coarse_col] = 1 if occupied_fraction >= occupied_fraction_threshold else 0
 
     return coarse
 
@@ -118,6 +123,12 @@ def coarse_cell_to_world(coarse_row, coarse_col, grid_map, block_size):
 
 def snap_to_nearest_free(coarse_cell, coarse_map):
     start_row, start_col = coarse_cell
+    if not (0 <= start_row < coarse_map.height and 0 <= start_col < coarse_map.width):
+        raise ValueError(
+            f"Coarse cell {coarse_cell} is outside map bounds "
+            f"{coarse_map.height}x{coarse_map.width}"
+        )
+
     if coarse_map.grid[start_row, start_col] == 0:
         return coarse_cell
 
@@ -144,6 +155,13 @@ def astar(coarse_map, start, goal):
     start = tuple(start)
     goal = tuple(goal)
 
+    for label, cell in (("start", start), ("goal", goal)):
+        row, col = cell
+        if not (0 <= row < coarse_map.height and 0 <= col < coarse_map.width):
+            raise ValueError(f"A* {label} cell {cell} is outside the map")
+        if coarse_map.grid[row, col] != 0:
+            raise ValueError(f"A* {label} cell {cell} is occupied")
+
     def heuristic(cell_a, cell_b):
         row_a, col_a = cell_a
         row_b, col_b = cell_b
@@ -167,6 +185,9 @@ def astar(coarse_map, start, goal):
                 continue
             if coarse_map.grid[nbr_row, nbr_col] == 1:
                 continue
+            if d_row != 0 and d_col != 0:
+                if coarse_map.grid[row + d_row, col] == 1 or coarse_map.grid[row, col + d_col] == 1:
+                    continue
 
             step_cost = math.sqrt(2.0) if d_row != 0 and d_col != 0 else 1.0
             neighbor = (nbr_row, nbr_col)

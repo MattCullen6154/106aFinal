@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 from pathlib import Path
 
 import numpy as np
@@ -87,8 +88,8 @@ def load_occupancy_map(yaml_path):
 
 
 def world_to_fine_cell(x, y, grid_map):
-    map_x = int((x - grid_map.meta.origin_x) / grid_map.meta.resolution)
-    map_y = int((y - grid_map.meta.origin_y) / grid_map.meta.resolution)
+    map_x = math.floor((x - grid_map.meta.origin_x) / grid_map.meta.resolution)
+    map_y = math.floor((y - grid_map.meta.origin_y) / grid_map.meta.resolution)
 
     row = grid_map.image_height - 1 - map_y
     col = map_x

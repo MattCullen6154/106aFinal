@@ -22,7 +22,7 @@ class PlannedPathPublisher(Node):
         self.declare_parameter("waypoints_yaml", default_waypoints_yaml)
         self.declare_parameter("start_waypoint", "recycle_bin")
         self.declare_parameter("goal_waypoint", "alice_corner")
-        self.declare_parameter("block_size", 4)
+        self.declare_parameter("block_size", 1)
         self.declare_parameter("inflation_radius", 0.15)
         self.declare_parameter("path_topic", "/planned_path")
         self.declare_parameter("frame_id", "map")
