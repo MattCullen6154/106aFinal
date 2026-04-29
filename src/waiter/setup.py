@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='ee106a-abn',
     maintainer_email='somil_03@berkeley.edu',
-    description='TODO: Package description',
+    description='Core waiter state machine',
     license='TODO: License declaration',
     extras_require={
         'test': [
@@ -24,7 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            "order_node = waiter.order_node:main",
+            "waiter_executive = waiter.waiter_executive:main",
             "kitchen_node = waiter.kitchen_node:main",
         ],
     },
