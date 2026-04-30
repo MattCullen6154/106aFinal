@@ -53,7 +53,7 @@ class YoloPerceptionNode(Node):
         
         # Initialize default state
         state_msg = ObstacleState()
-        state_msg.header.stamp = self.get_clock().now().to_msg() # ROS 2 clock
+        state_msg.header.stamp = self.get_clock().now().to_msg()
         state_msg.obstacle_detected = False
         state_msg.action = "CLEAR"
         state_msg.obstacle_class = "None"

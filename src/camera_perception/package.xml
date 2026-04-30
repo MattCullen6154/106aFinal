@@ -4,7 +4,7 @@
   <name>camera_perception</name>
   <version>0.0.1</version>
   <description>ROS 2 YOLO perception node</description>
-  <maintainer email="student@berkeley.edu">Team Waiter</maintainer>
+  <maintainer email="khanhha867@berkeley.edu">Team Waiter</maintainer>
   <license>MIT</license>
 
   <depend>rclpy</depend>
