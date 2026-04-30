@@ -22,7 +22,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'yolo_perception_node = camera_perception.yolo_perception_node:main'
+            'yolo_perception_node = camera_perception.yolo_perception_node:main',
+            'logitech_sfm_node = camera_perception.logitech_sfm_node:main'
         ],
     },
 )
