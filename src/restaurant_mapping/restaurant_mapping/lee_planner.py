@@ -9,6 +9,8 @@ from nav_msgs.msg import OccupancyGrid, Path as PathMsg
 import numpy as np
 import rclpy
 from rclpy.node import Node
+import tf2_ros
+from visualization_msgs.msg import Marker, MarkerArray
 
 from .waypoint_loader import load_waypoints
 
@@ -23,9 +25,12 @@ class LeePlanner(Node):
         self.declare_parameter("map_topic", "/map")
         self.declare_parameter("path_topic", "/planned_path")
         self.declare_parameter("planning_grid_topic", "/planning_grid")
+        self.declare_parameter("waypoint_marker_topic", "/waypoint_markers")
         self.declare_parameter("waypoints_yaml", default_waypoints)
+        self.declare_parameter("start_mode", "waypoint")
         self.declare_parameter("start_waypoint", "recycle_bin")
         self.declare_parameter("goal_waypoint", "alice_corner")
+        self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("block_size", 7)
         self.declare_parameter("occupied_fraction_threshold", 0.15)
         self.declare_parameter("inflation_radius", 0.15)
@@ -34,9 +39,12 @@ class LeePlanner(Node):
         self.map_topic = self.get_parameter("map_topic").value
         self.path_topic = self.get_parameter("path_topic").value
         self.planning_grid_topic = self.get_parameter("planning_grid_topic").value
+        self.waypoint_marker_topic = self.get_parameter("waypoint_marker_topic").value
         self.waypoints_yaml = self.get_parameter("waypoints_yaml").value
+        self.start_mode = self.get_parameter("start_mode").value
         self.start_waypoint = self.get_parameter("start_waypoint").value
         self.goal_waypoint = self.get_parameter("goal_waypoint").value
+        self.robot_frame = self.get_parameter("robot_frame").value
         self.block_size = int(self.get_parameter("block_size").value)
         self.occupied_fraction_threshold = float(
             self.get_parameter("occupied_fraction_threshold").value
@@ -47,23 +55,33 @@ class LeePlanner(Node):
         )
 
         self.waypoints = load_waypoints(self.waypoints_yaml)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.path_pub = self.create_publisher(PathMsg, self.path_topic, 10)
         self.planning_grid_pub = self.create_publisher(
             OccupancyGrid, self.planning_grid_topic, 1
         )
+        self.waypoint_marker_pub = self.create_publisher(
+            MarkerArray, self.waypoint_marker_topic, 1
+        )
         self.map_sub = self.create_subscription(
             OccupancyGrid, self.map_topic, self.map_callback, 1
         )
+        self.create_timer(1.0, self.publish_waypoint_markers)
 
         self.get_logger().info(
-            "LeePlanner: %s -> %s, block_size=%d (~0.35m with 0.05m maps)"
-            % (self.start_waypoint, self.goal_waypoint, self.block_size)
+            "LeePlanner: start_mode=%s, start=%s, goal=%s, block_size=%d"
+            % (self.start_mode, self.start_waypoint, self.goal_waypoint, self.block_size)
         )
 
     def map_callback(self, msg):
-        if self.start_waypoint not in self.waypoints or self.goal_waypoint not in self.waypoints:
+        if self.goal_waypoint not in self.waypoints:
             names = ", ".join(sorted(self.waypoints))
             self.get_logger().error(f"Unknown waypoint. Available: {names}")
+            return
+        if self.start_mode == "waypoint" and self.start_waypoint not in self.waypoints:
+            names = ", ".join(sorted(self.waypoints))
+            self.get_logger().error(f"Unknown start waypoint. Available: {names}")
             return
 
         fine_grid = np.array(msg.data, dtype=np.int16).reshape(
@@ -72,11 +90,11 @@ class LeePlanner(Node):
         inflated = self.inflate_obstacles(fine_grid, msg.info.resolution)
         coarse_grid = self.coarsen_grid(inflated)
 
-        start = self.world_to_coarse_cell(
-            self.waypoints[self.start_waypoint].x,
-            self.waypoints[self.start_waypoint].y,
-            msg,
-        )
+        start = self.start_cell(msg)
+        if start is None:
+            self.publish_planning_grid(coarse_grid, msg)
+            return
+
         goal = self.world_to_coarse_cell(
             self.waypoints[self.goal_waypoint].x,
             self.waypoints[self.goal_waypoint].y,
@@ -88,8 +106,7 @@ class LeePlanner(Node):
         path = self.lee_search(coarse_grid, start, goal)
         if not path:
             self.get_logger().warn(
-                "No Lee path found from %s to %s"
-                % (self.start_waypoint, self.goal_waypoint),
+                "No Lee path found from %s to %s" % (self.start_label(), self.goal_waypoint),
                 throttle_duration_sec=2.0,
             )
             self.publish_planning_grid(coarse_grid, msg)
@@ -97,6 +114,39 @@ class LeePlanner(Node):
 
         self.publish_planning_grid(coarse_grid, msg)
         self.publish_path(path, msg)
+
+    def start_cell(self, map_msg):
+        if self.start_mode == "waypoint":
+            start = self.waypoints[self.start_waypoint]
+            return self.world_to_coarse_cell(start.x, start.y, map_msg)
+
+        if self.start_mode != "robot":
+            self.get_logger().error(
+                "Invalid start_mode '%s'. Use 'waypoint' or 'robot'." % self.start_mode
+            )
+            return None
+
+        try:
+            pose = self.tf_buffer.lookup_transform(
+                map_msg.header.frame_id, self.robot_frame, rclpy.time.Time()
+            )
+        except Exception as exc:
+            self.get_logger().warn(
+                "Robot pose lookup failed: %s" % exc,
+                throttle_duration_sec=2.0,
+            )
+            return None
+
+        return self.world_to_coarse_cell(
+            pose.transform.translation.x,
+            pose.transform.translation.y,
+            map_msg,
+        )
+
+    def start_label(self):
+        if self.start_mode == "robot":
+            return self.robot_frame
+        return self.start_waypoint
 
     def inflate_obstacles(self, fine_grid, resolution):
         radius_cells = int(math.ceil(self.inflation_radius / resolution))
@@ -247,6 +297,52 @@ class LeePlanner(Node):
             "Published Lee path with %d coarse cells" % len(path),
             throttle_duration_sec=2.0,
         )
+
+    def publish_waypoint_markers(self):
+        markers = MarkerArray()
+        now = self.get_clock().now().to_msg()
+
+        for marker_id, waypoint in enumerate(self.waypoints.values()):
+            marker = Marker()
+            marker.header.stamp = now
+            marker.header.frame_id = "map"
+            marker.ns = "waypoints"
+            marker.id = marker_id
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = waypoint.x
+            marker.pose.position.y = waypoint.y
+            marker.pose.position.z = 0.08
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.18
+            marker.scale.y = 0.18
+            marker.scale.z = 0.18
+            marker.color.r = 1.0
+            marker.color.g = 0.65
+            marker.color.b = 0.05
+            marker.color.a = 1.0
+            markers.markers.append(marker)
+
+            label = Marker()
+            label.header.stamp = now
+            label.header.frame_id = "map"
+            label.ns = "waypoint_labels"
+            label.id = marker_id
+            label.type = Marker.TEXT_VIEW_FACING
+            label.action = Marker.ADD
+            label.pose.position.x = waypoint.x
+            label.pose.position.y = waypoint.y
+            label.pose.position.z = 0.35
+            label.pose.orientation.w = 1.0
+            label.scale.z = 0.22
+            label.color.r = 1.0
+            label.color.g = 1.0
+            label.color.b = 1.0
+            label.color.a = 1.0
+            label.text = waypoint.name
+            markers.markers.append(label)
+
+        self.waypoint_marker_pub.publish(markers)
 
     def publish_planning_grid(self, coarse_grid, map_msg):
         msg = OccupancyGrid()
