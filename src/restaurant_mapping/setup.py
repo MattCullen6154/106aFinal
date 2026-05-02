@@ -26,6 +26,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mapping_node = restaurant_mapping.mapping_node:main",
+            "lee_planner = restaurant_mapping.lee_planner:main",
         ],
     },
 )

@@ -47,6 +47,26 @@ def generate_launch_description():
                     "odom",
                     
                 ],
-            )
+            ),
+            Node(
+                package="restaurant_mapping",
+                executable="lee_planner",
+                name="lee_planner",
+                output="screen",
+                parameters=[
+                    {
+                        "map_topic": "/map",
+                        "path_topic": "/planned_path",
+                        "planning_grid_topic": "/planning_grid",
+                        "waypoints_yaml": str(package_share / "config" / "waypoints.yaml"),
+                        "start_waypoint": "recycle_bin",
+                        "goal_waypoint": "alice_corner",
+                        "block_size": 7,
+                        "occupied_fraction_threshold": 0.15,
+                        "inflation_radius": 0.15,
+                        "treat_unknown_as_occupied": False,
+                    }
+                ],
+            ),
         ]
     )
