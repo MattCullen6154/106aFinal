@@ -1,7 +1,0 @@
-
-alignment from map to odom, starting from recycle bin
-
-ros2 run tf2_ros static_transform_publisher -1.7 -1.9 0 -0.07 0 0 map odom
-
-
-need to add an initial pose waypoint for the robot, path_publisher currently publishes alice->rb only
