@@ -30,6 +30,23 @@ def generate_launch_description():
                         "max_range": 3.5,
                     }
                 ],
+            ),
+            Node( #Map/scan alignment (done with Kiwi, check others)| -0.87 -1.875 0 -.12 0 0 map odom
+                package="tf2_ros",
+                executable="static_transform_publisher",
+                name="map_to_odom",
+                arguments=[
+                
+                    "--x", "-0.97",
+                    "--y", "-1.875",
+                    "--z", "0.0",
+                    "--yaw", "-0.12",
+                    "--pitch", "0.0",
+                    "--roll", "0.0",
+                    "--frame_id", "map",
+                    "--child_frame_id", "odom",
+                    
+                ],
             )
         ]
     )

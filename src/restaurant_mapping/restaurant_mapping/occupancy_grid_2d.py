@@ -178,8 +178,8 @@ class OccupancyGrid2d(Node):
     def dynamic_occupancy(self):
         probability = 1.0 - 1.0 / (1.0 + np.exp(self._dynamic_log_odds))
         grid = np.full(probability.shape, -1, dtype=np.int8)
-        grid[probability >= 0.65] = 100
-        grid[probability <= 0.35] = 0
+        grid[probability >= 0.65] = 100 #.65
+        grid[probability <= 0.35] = 0 #.35
         return grid
 
     def combined_occupancy(self):
