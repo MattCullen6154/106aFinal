@@ -37,14 +37,14 @@ def generate_launch_description():
                 name="map_to_odom",
                 arguments=[
                 
-                    "--x", "-0.97",
-                    "--y", "-1.875",
-                    "--z", "0.0",
-                    "--yaw", "-0.12",
-                    "--pitch", "0.0",
-                    "--roll", "0.0",
-                    "--frame_id", "map",
-                    "--child_frame_id", "odom",
+                     "-0.97",
+                    "-1.875",
+                    "0.0",
+                    "-0.12",
+                    "0.0",
+                    "0.0",
+                    "map",
+                    "odom",
                     
                 ],
             )
