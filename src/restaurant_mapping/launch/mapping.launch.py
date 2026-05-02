@@ -62,8 +62,8 @@ def generate_launch_description():
                         "start_waypoint": "recycle_bin",
                         "goal_waypoint": "alice_corner",
                         "block_size": 7,
-                        "occupied_fraction_threshold": 0.15,
-                        "inflation_radius": 0.15,
+                        "occupied_fraction_threshold": 0.35,
+                        "inflation_radius": 0.05,
                         "treat_unknown_as_occupied": False,
                     }
                 ],
