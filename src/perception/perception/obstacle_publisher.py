@@ -4,20 +4,49 @@ import os
 from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PointStamped
+from std_msgs.msg import Bool
 from cv_bridge import CvBridge
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
 from ultralytics import YOLO
 
-class ImageSubscriber(Node):
+# COCO class IDs that count as semantic obstacles the waiter robot should react to.
+# 0 = person, 24 = backpack, 26 = handbag, 56 = chair, 60 = dining table, 63 = laptop
+OBSTACLE_CLASSES = {0, 24, 26, 56, 60, 63}
+
+# Approximate real-world frontal area (m²) used for mask-based depth estimation.
+OBSTACLE_AREA = {
+    0:  0.50,   # person
+    24: 0.04,   # backpack
+    26: 0.03,   # handbag
+    56: 0.30,   # chair
+    60: 0.80,   # dining table
+    63: 0.04,   # laptop
+}
+DEFAULT_OBSTACLE_AREA = 0.25  # fallback for any unlisted class
+ 
+# If the closest detected obstacle is within this distance (metres), command a hold.
+HOLD_DISTANCE_THRESHOLD = 1.2
+
+class CameraPerceptionNode(Node):
+    """
+    Camera perception node for the autonomous robot waiter.
+    Subscribes to the Logitech webcam image stream, runs a YOLO segmentation
+    model to detect people and large obstacles, estimates their depth from the
+    mask pixel count and camera intrinsics, and publishes:
+      - /obstacle_point  (geometry_msgs/PointStamped) : 3-D position of the
+                          nearest obstacle in the base_link frame.
+      - /obstacle_hold   (std_msgs/Bool)              : True  → stop / hold,
+                                                        False → path is clear.
+    """
     def __init__(self):
-        super().__init__('image_subscriber')
+        super().__init__('camera_perception')
 
         self.bridge = CvBridge()
 
         # Load YOLO model
         package_share_dir = get_package_share_directory('perception')
-        model_path = os.path.join(package_share_dir, 'utilities', 'segment_bounding_box_cones.pt')
+        model_path = os.path.join(package_share_dir, 'utilities', 'yolov8n-seg.pt')
         self.model = YOLO(model_path)
 
         self.image_sub = self.create_subscription(Image, '/image_raw', self.image_callback, 1)
