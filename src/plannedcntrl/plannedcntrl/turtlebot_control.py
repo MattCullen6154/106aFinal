@@ -19,6 +19,7 @@ class TurtleBotController(Node):
         self.declare_parameter("cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("position_tolerance", 0.12)
+        self.declare_parameter("goal_tolerance", 0.5)
         self.declare_parameter("linear_gain", 0.7)
         self.declare_parameter("angular_gain", 1.5)
         self.declare_parameter("max_linear_speed", 0.18)
@@ -29,6 +30,7 @@ class TurtleBotController(Node):
         self.cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
         self.robot_frame = self.get_parameter("robot_frame").value
         self.position_tolerance = float(self.get_parameter("position_tolerance").value)
+        self.goal_tolerance = float(self.get_parameter("goal_tolerance").value)
         self.linear_gain = float(self.get_parameter("linear_gain").value)
         self.angular_gain = float(self.get_parameter("angular_gain").value)
         self.max_linear_speed = float(self.get_parameter("max_linear_speed").value)
@@ -77,7 +79,8 @@ class TurtleBotController(Node):
         dy = target_y - robot_y
         distance = math.hypot(dx, dy)
 
-        if distance < self.position_tolerance:
+        tolerance = self.current_target_tolerance()
+        if distance < tolerance:
             self.path_index += 1
             if self.path_index >= len(self.path_points):
                 self.stop_robot()
@@ -85,7 +88,9 @@ class TurtleBotController(Node):
                 if not self.arrival_reported:
                     self.publish_status("arrived")
                     self.arrival_reported = True
-                    self.get_logger().info("Arrived at planned path goal.")
+                    self.get_logger().info(
+                        "Arrived at planned path goal within %.2fm." % self.goal_tolerance
+                    )
                 return
             return
 
@@ -128,6 +133,11 @@ class TurtleBotController(Node):
 
     def stop_robot(self):
         self.cmd_pub.publish(Twist())
+
+    def current_target_tolerance(self):
+        if self.path_index >= len(self.path_points) - 1:
+            return self.goal_tolerance
+        return self.position_tolerance
 
     def publish_status(self, status):
         self.status_pub.publish(String(data=status))
