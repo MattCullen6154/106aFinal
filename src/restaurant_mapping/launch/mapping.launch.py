@@ -31,16 +31,17 @@ def generate_launch_description():
                     }
                 ],
             ),
-            Node( #Map/scan alignment (done with Kiwi, check others)| -0.87 -1.875 0 -.12 0 0 map odom
+            #Robot placed on X in front of station 2, facing NE
+            Node( #Map/scan alignment (done with Kiwi, check others)| -0.55 -2.6 0 .6 0 0 map odom
                 package="tf2_ros",
                 executable="static_transform_publisher",
                 name="map_to_odom",
                 arguments=[
                 
-                     "-0.97",
-                    "-1.875",
+                     "-0.55",
+                    "-2.6",
                     "0.0",
-                    "-0.12",
+                    ".7",
                     "0.0",
                     "0.0",
                     "map",
@@ -65,7 +66,7 @@ def generate_launch_description():
                         "goal_waypoint": "alice_corner",
                         "robot_frame": "base_link",
                         "block_size": 7,
-                        "occupied_fraction_threshold": 0.35,
+                        "occupied_fraction_threshold": 0.1,
                         "inflation_radius": 0.05,
                         "treat_unknown_as_occupied": False,
                     }
