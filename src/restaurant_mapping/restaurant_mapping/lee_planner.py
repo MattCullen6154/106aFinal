@@ -9,6 +9,7 @@ from nav_msgs.msg import OccupancyGrid, Path as PathMsg
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 import tf2_ros
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -26,10 +27,12 @@ class LeePlanner(Node):
         self.declare_parameter("path_topic", "/planned_path")
         self.declare_parameter("planning_grid_topic", "/planning_grid")
         self.declare_parameter("waypoint_marker_topic", "/waypoint_markers")
+        self.declare_parameter("goal_waypoint_topic", "/nav_goal_waypoint")
         self.declare_parameter("waypoints_yaml", default_waypoints)
         self.declare_parameter("start_mode", "waypoint")
-        self.declare_parameter("start_waypoint", "recycle_bin")
-        self.declare_parameter("goal_waypoint", "alice_corner")
+        self.declare_parameter("start_waypoint", "table")
+        self.declare_parameter("goal_waypoint", "kitchen")
+        self.declare_parameter("plan_on_start", False)
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("block_size", 7)
         self.declare_parameter("occupied_fraction_threshold", 0.15)
@@ -40,10 +43,12 @@ class LeePlanner(Node):
         self.path_topic = self.get_parameter("path_topic").value
         self.planning_grid_topic = self.get_parameter("planning_grid_topic").value
         self.waypoint_marker_topic = self.get_parameter("waypoint_marker_topic").value
+        self.goal_waypoint_topic = self.get_parameter("goal_waypoint_topic").value
         self.waypoints_yaml = self.get_parameter("waypoints_yaml").value
         self.start_mode = self.get_parameter("start_mode").value
         self.start_waypoint = self.get_parameter("start_waypoint").value
         self.goal_waypoint = self.get_parameter("goal_waypoint").value
+        self.has_goal = bool(self.get_parameter("plan_on_start").value)
         self.robot_frame = self.get_parameter("robot_frame").value
         self.block_size = int(self.get_parameter("block_size").value)
         self.occupied_fraction_threshold = float(
@@ -67,6 +72,9 @@ class LeePlanner(Node):
         self.map_sub = self.create_subscription(
             OccupancyGrid, self.map_topic, self.map_callback, 1
         )
+        self.goal_sub = self.create_subscription(
+            String, self.goal_waypoint_topic, self.goal_callback, 10
+        )
         self.create_timer(1.0, self.publish_waypoint_markers)
 
         self.get_logger().info(
@@ -74,7 +82,29 @@ class LeePlanner(Node):
             % (self.start_mode, self.start_waypoint, self.goal_waypoint, self.block_size)
         )
 
+    def goal_callback(self, msg):
+        waypoint_name = msg.data.strip()
+        if waypoint_name not in self.waypoints:
+            names = ", ".join(sorted(self.waypoints))
+            self.get_logger().error(
+                "Ignoring unknown nav goal '%s'. Available: %s" % (waypoint_name, names)
+            )
+            return
+
+        self.goal_waypoint = waypoint_name
+        self.start_mode = "robot"
+        self.has_goal = True
+        self.get_logger().info("New navigation goal: %s" % self.goal_waypoint)
+
     def map_callback(self, msg):
+        if not self.has_goal:
+            fine_grid = np.array(msg.data, dtype=np.int16).reshape(
+                (msg.info.height, msg.info.width)
+            )
+            inflated = self.inflate_obstacles(fine_grid, msg.info.resolution)
+            self.publish_planning_grid(self.coarsen_grid(inflated), msg)
+            return
+
         if self.goal_waypoint not in self.waypoints:
             names = ", ".join(sorted(self.waypoints))
             self.get_logger().error(f"Unknown waypoint. Available: {names}")

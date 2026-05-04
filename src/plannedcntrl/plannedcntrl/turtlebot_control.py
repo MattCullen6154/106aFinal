@@ -1,167 +1,168 @@
 #!/usr/bin/env python3
 
 import math
+
+from geometry_msgs.msg import Twist
+from nav_msgs.msg import Path
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 import tf2_ros
-import numpy as np
-import transforms3d.euler as euler
-from geometry_msgs.msg import TransformStamped, PoseStamped, Twist, PointStamped
-from tf2_geometry_msgs.tf2_geometry_msgs import do_transform_pose
-from plannedcntrl.trajectory import plan_curved_trajectory  # Your existing Bezier planner
-import time
+
 
 class TurtleBotController(Node):
     def __init__(self):
-        super().__init__('turtlebot_controller')
+        super().__init__("turtlebot_controller")
 
-        # Publisher and TF setup
-        self.pub = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.declare_parameter("path_topic", "/planned_path")
+        self.declare_parameter("status_topic", "/nav_status")
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
+        self.declare_parameter("robot_frame", "base_link")
+        self.declare_parameter("position_tolerance", 0.12)
+        self.declare_parameter("linear_gain", 0.7)
+        self.declare_parameter("angular_gain", 1.5)
+        self.declare_parameter("max_linear_speed", 0.18)
+        self.declare_parameter("max_angular_speed", 0.8)
+
+        self.path_topic = self.get_parameter("path_topic").value
+        self.status_topic = self.get_parameter("status_topic").value
+        self.cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
+        self.robot_frame = self.get_parameter("robot_frame").value
+        self.position_tolerance = float(self.get_parameter("position_tolerance").value)
+        self.linear_gain = float(self.get_parameter("linear_gain").value)
+        self.angular_gain = float(self.get_parameter("angular_gain").value)
+        self.max_linear_speed = float(self.get_parameter("max_linear_speed").value)
+        self.max_angular_speed = float(self.get_parameter("max_angular_speed").value)
+
+        self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
+        self.status_pub = self.create_publisher(String, self.status_topic, 10)
+        self.create_subscription(Path, self.path_topic, self.path_callback, 10)
+
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # Controller gains
-        self.Kp = np.diag([0.8, 1.5])
-        self.Ki = np.diag([0.0, 0.0])
-        self.Kd = np.diag([0.0, 0.1])
+        self.path_frame = "map"
+        self.path_points = []
+        self.path_index = 0
+        self.arrival_reported = True
 
-        # Subscriber
-        self.create_subscription(PointStamped, '/goal_point', self.planning_callback, 10)
-        self.timer = self.create_timer(0.5, self.control_loop)
+        self.create_timer(0.1, self.control_loop)
+        self.get_logger().info("TurtleBot path controller listening on %s" % self.path_topic)
 
-        self.trajectory = None
-        self.traj_index = 0
-        self.x_i_err = 0.0
-        self.yaw_i_err = 0.0
-        self.prev_x_err = None
-        self.prev_yaw_err = None
+    def path_callback(self, msg):
+        if not msg.poses:
+            self.get_logger().warn("Ignoring empty planned path.")
+            return
 
-        self.get_logger().info('TurtleBot controller node initialized.')
-
-    # ------------------------------------------------------------------
-    # Main waypoint controller
-    # ------------------------------------------------------------------
+        self.path_frame = msg.header.frame_id or "map"
+        self.path_points = [
+            (pose.pose.position.x, pose.pose.position.y) for pose in msg.poses
+        ]
+        self.path_index = 0
+        self.arrival_reported = False
+        self.publish_status("moving")
+        self.get_logger().info("Received path with %d poses." % len(self.path_points))
 
     def control_loop(self):
-        if not self.trajectory:
+        if not self.path_points:
             return
 
-        if self.traj_index >= len(self.trajectory):
-            self.trajectory = None
-            self.traj_index = 0
-            self.x_i_err = 0.0
-            self.yaw_i_err = 0.0
-            self.prev_x_err = None
-            self.prev_yaw_err = None
-            self.pub.publish(Twist())
+        robot_pose = self.lookup_robot_pose()
+        if robot_pose is None:
             return
 
-        waypoint = self.trajectory[self.traj_index]
-        waypoint_pose = PoseStamped()
-        # TODO: Fill in waypoint pose message using docs for PoseStamped 
-        # (recall what frame this trajectory point is in from your trajectory.py code)
-        waypoint_pose.header.frame_id = 'odom'
-        waypoint_pose.header.stamp = self.get_clock().now().to_msg()
-        waypoint_pose.pose.position.x = waypoint[0]
-        waypoint_pose.pose.position.y = waypoint[1]
-        waypoint_pose.pose.position.z = 0.0
+        robot_x, robot_y, robot_yaw = robot_pose
+        target_x, target_y = self.path_points[self.path_index]
+        dx = target_x - robot_x
+        dy = target_y - robot_y
+        distance = math.hypot(dx, dy)
 
-        q = self._quat_from_yaw(waypoint[2])
-        waypoint_pose.pose.orientation.x = q[0]
-        waypoint_pose.pose.orientation.y = q[1]
-        waypoint_pose.pose.orientation.z = q[2]
-        waypoint_pose.pose.orientation.w = q[3]
-        # NOTE: The staticmethod below may be helpful
-
-
-        # TODO: Find tf and transform waypoint to base_link
-        # NOTE: do_transform_pose takes in and outputs a pose message type not PoseStamped (this is contrary to online documentation)
-        odom_to_base = self.tf_buffer.lookup_transform('base_footprint', 'odom', rclpy.time.Time())
-        waypoint_base = do_transform_pose(waypoint_pose.pose, odom_to_base)
-
-        # TODO: Calculate proportional error terms including x_err and y_err
-        x_err = waypoint_base.position.x
-        y_err = waypoint_base.position.y
-        yaw_err = math.atan2(y_err, x_err)
-
-        if abs(x_err) < 0.03 and abs(y_err) < 0.03:
-            self.traj_index += 1
-            print("Waypoint Reached, Now going to waypoint ", self.traj_index)
-            self.prev_x_err = None
-            self.prev_yaw_err = None
+        if distance < self.position_tolerance:
+            self.path_index += 1
+            if self.path_index >= len(self.path_points):
+                self.stop_robot()
+                self.path_points = []
+                if not self.arrival_reported:
+                    self.publish_status("arrived")
+                    self.arrival_reported = True
+                    self.get_logger().info("Arrived at planned path goal.")
+                return
             return
 
-        # TODO: Update derivative and integral error terms (refer to class variables defined in init)
-        # Derivative terms
-        if self.prev_x_err is None:
-            x_d_err = 0.0
-        else:
-            x_d_err = x_err - self.prev_x_err
-        if self.prev_yaw_err is None:
-            yaw_d_err = 0.0
-        else:
-            yaw_d_err = yaw_err - self.prev_yaw_err
-        
-        # Intergral terms
-        self.x_i_err += x_err
-        self.yaw_i_err += y_err
+        heading = math.atan2(dy, dx)
+        heading_error = self.normalize_angle(heading - robot_yaw)
 
-        # Twist components
-        v = (self.Kp[0, 0] * x_err + \
-             self.Ki[0, 0] * self.x_i_err + \
-             self.Kd[0, 0] * x_d_err)
-        
-        omega = (self.Kp[1, 1] * yaw_err + \
-                 self.Ki[1, 1] * self.yaw_i_err + \
-                 self.Kd[1, 1] * yaw_d_err)
-        
-        # TODO: Generate control command from error terms 
-        control_cmd = Twist()
-        control_cmd.linear.x = v
-        control_cmd.angular.z = omega
-        self.pub.publish(control_cmd)
+        cmd = Twist()
+        if abs(heading_error) < 1.0:
+            cmd.linear.x = self.clamp(
+                self.linear_gain * distance,
+                -self.max_linear_speed,
+                self.max_linear_speed,
+            )
+        cmd.angular.z = self.clamp(
+            self.angular_gain * heading_error,
+            -self.max_angular_speed,
+            self.max_angular_speed,
+        )
+        self.cmd_pub.publish(cmd)
 
-        # Update errors
-        self.prev_x_err = x_err
-        self.prev_yaw_err = yaw_err
-  
+    def lookup_robot_pose(self):
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.path_frame, self.robot_frame, rclpy.time.Time()
+            )
+        except Exception as exc:
+            self.get_logger().warn(
+                "Robot pose lookup failed: %s" % exc,
+                throttle_duration_sec=2.0,
+            )
+            return None
 
-    # ------------------------------------------------------------------
-    # Callback when goal point is published
-    # ------------------------------------------------------------------
-    def planning_callback(self, msg: PointStamped):
-        if self.trajectory:
-            return
-        
-        dx = msg.point.x
-        dy = msg.point.y
+        translation = transform.transform.translation
+        rotation = transform.transform.rotation
+        return (
+            translation.x,
+            translation.y,
+            self.yaw_from_quaternion(rotation.x, rotation.y, rotation.z, rotation.w),
+        )
 
-        self.trajectory = plan_curved_trajectory((dx, dy))
-        self.traj_index = 0
-        self.x_i_err = 0.0
-        self.yaw_i_err = 0.0
-        self.prev_x_err = None
-        self.prev_yaw_err = None
+    def stop_robot(self):
+        self.cmd_pub.publish(Twist())
 
-    # ------------------------------------------------------------------
-    # Utility
-    # ------------------------------------------------------------------
+    def publish_status(self, status):
+        self.status_pub.publish(String(data=status))
+
     @staticmethod
-    def _quat_from_yaw(yaw):
-        """Return quaternion (x, y, z, w) from yaw angle."""
-        return [0.0, 0.0, math.sin(yaw / 2.0), math.cos(yaw / 2.0)]
+    def yaw_from_quaternion(x, y, z, w):
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+        return math.atan2(siny_cosp, cosy_cosp)
+
+    @staticmethod
+    def normalize_angle(angle):
+        while angle > math.pi:
+            angle -= 2.0 * math.pi
+        while angle < -math.pi:
+            angle += 2.0 * math.pi
+        return angle
+
+    @staticmethod
+    def clamp(value, min_value, max_value):
+        return max(min_value, min(value, max_value))
 
 
-# ----------------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------------
 def main(args=None):
     rclpy.init(args=args)
     node = TurtleBotController()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.stop_robot()
+        node.destroy_node()
+        rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

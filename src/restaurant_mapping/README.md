@@ -24,6 +24,7 @@ The node publishes:
 - `/waypoint_markers`: RViz markers for named waypoints
 - `/planning_grid`: coarsened grid used by Lee's algorithm
 - `/planned_path`: Lee path between named waypoints
+- `/nav_goal_waypoint`: waypoint-name command input for the planner
 
 Run after building and sourcing the ROS workspace:
 
