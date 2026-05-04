@@ -21,9 +21,9 @@ class TurtleBotController(Node):
         self.declare_parameter("position_tolerance", 0.12)
         self.declare_parameter("goal_tolerance", 0.5)
         self.declare_parameter("linear_gain", 0.7)
-        self.declare_parameter("angular_gain", 1.5)
-        self.declare_parameter("max_linear_speed", 0.18)
-        self.declare_parameter("max_angular_speed", 0.8)
+        self.declare_parameter("angular_gain", 0.35)
+        self.declare_parameter("max_linear_speed", 0.3)
+        self.declare_parameter("max_angular_speed", 0.2)
 
         self.path_topic = self.get_parameter("path_topic").value
         self.status_topic = self.get_parameter("status_topic").value
@@ -98,12 +98,20 @@ class TurtleBotController(Node):
         heading_error = self.normalize_angle(heading - robot_yaw)
 
         cmd = Twist()
-        if abs(heading_error) < 1.0:
-            cmd.linear.x = self.clamp(
-                self.linear_gain * distance,
-                -self.max_linear_speed,
-                self.max_linear_speed,
-            )
+        heading_scale = max(0.0, math.cos(heading_error))
+
+        cmd.linear.x = self.clamp(
+            self.linear_gain * distance * heading_scale, 
+            0.0, 
+            self.max_linear_speed,
+        )
+
+        #if abs(heading_error) < 1.0:
+        #    cmd.linear.x = self.clamp(
+        #        self.linear_gain * distance,
+        #        -self.max_linear_speed,
+        #        self.max_linear_speed,
+        #    )
         cmd.angular.z = self.clamp(
             self.angular_gain * heading_error,
             -self.max_angular_speed,
