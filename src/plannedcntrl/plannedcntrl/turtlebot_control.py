@@ -19,11 +19,11 @@ class TurtleBotController(Node):
         self.declare_parameter("cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("position_tolerance", 0.22)
-        self.declare_parameter("goal_tolerance", 0.5)
-        self.declare_parameter("linear_gain", 0.25)
-        self.declare_parameter("angular_gain", 0.5)
-        self.declare_parameter("max_linear_speed", 0.4)
-        self.declare_parameter("max_angular_speed", 0.4)
+        self.declare_parameter("goal_tolerance", 0.3)
+        self.declare_parameter("linear_gain", 0.35)
+        self.declare_parameter("angular_gain", 0.2)
+        self.declare_parameter("max_linear_speed", 0.12)
+        self.declare_parameter("max_angular_speed", 0.18)
 
         self.path_topic = self.get_parameter("path_topic").value
         self.status_topic = self.get_parameter("status_topic").value
@@ -96,6 +96,9 @@ class TurtleBotController(Node):
 
         heading = math.atan2(dy, dx)
         heading_error = self.normalize_angle(heading - robot_yaw)
+        # adding deadband to stop jerkiness
+        #if abs(heading_error <= 0.08):
+        #    heading_error = 0.0
 
         cmd = Twist()
 

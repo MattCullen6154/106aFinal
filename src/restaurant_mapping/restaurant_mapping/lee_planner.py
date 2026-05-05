@@ -35,7 +35,7 @@ class LeePlanner(Node):
         self.declare_parameter("plan_on_start", False)
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("block_size", 7)
-        self.declare_parameter("occupied_fraction_threshold", 0.15)
+        self.declare_parameter("occupied_fraction_threshold", 0.1)
         self.declare_parameter("inflation_radius", 0.15)
         self.declare_parameter("treat_unknown_as_occupied", False)
 
