@@ -22,7 +22,7 @@ class TurtleBotController(Node):
         self.declare_parameter("goal_tolerance", 0.3)
         self.declare_parameter("linear_gain", 0.35)
         self.declare_parameter("angular_gain", 0.2)
-        self.declare_parameter("max_linear_speed", 0.12)
+        self.declare_parameter("max_linear_speed", 0.15)
         self.declare_parameter("max_angular_speed", 0.18)
 
         self.path_topic = self.get_parameter("path_topic").value
