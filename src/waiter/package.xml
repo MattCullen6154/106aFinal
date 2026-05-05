@@ -7,10 +7,12 @@
   <maintainer email="somil_03@berkeley.edu">ee106a-abn</maintainer>
   <license>TODO: License declaration</license>
 
+  <depend>ament_index_python</depend>
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
+  <exec_depend>restaurant_mapping</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

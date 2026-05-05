@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
+import math
 import os
+from pathlib import Path
 import threading
 import time
 
+from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int32MultiArray, String
@@ -23,13 +26,11 @@ def print_menu():
     print(f"{GOLD}║{RESET} {BOLD}          THE TOASTED TURTLE            {RESET} {GOLD}║{RESET}")
     print(f"{GOLD}╠══════════════════════════════════════════╣{RESET}")
     print(f"{GOLD}║{RESET} {CYAN}“Hi! I will be your waiter today.”  {RESET}     {GOLD}║{RESET}")
-    print(f"{GOLD}║{RESET}  Please select an option below:          {GOLD}║{RESET}")
+    print(f"{GOLD}║{RESET}  Build an order below:                   {GOLD}║{RESET}")
     print(f"{GOLD}║{RESET}                                          {GOLD}║{RESET}")
-    print(f"{GOLD}║{RESET}  {BLUE}(1){RESET} Water                            {GOLD}║{RESET}")
-    print(f"{GOLD}║{RESET}  {BLUE}(2){RESET} Burger                           {GOLD}║{RESET}")
-    print(f"{GOLD}║{RESET}  {BLUE}(3){RESET} Fries                            {GOLD}║{RESET}")
-    print(f"{GOLD}║{RESET}  {BLUE}(4){RESET} Shake                            {GOLD}║{RESET}")
-    print(f"{GOLD}║{RESET}  {BLUE}(5){RESET} Nothing / exit                   {GOLD}║{RESET}")
+    print(f"{GOLD}║{RESET}  Food: burger, fries, shake, or none     {GOLD}║{RESET}")
+    print(f"{GOLD}║{RESET}  Water: yes or no                        {GOLD}║{RESET}")
+    print(f"{GOLD}║{RESET}  Type exit to quit                       {GOLD}║{RESET}")
     print(f"{GOLD}╚══════════════════════════════════════════╝{RESET}")
 
 
@@ -42,8 +43,11 @@ class WaiterExecutive(Node):
 
         self.nav_status = "idle"
         self.current_target = None
+        self.current_location = "kitchen"
         self.state = "TAKING_ORDER"
-        self.pending_pickup = None
+        self.route_queue = []
+        self.pickup_stops = set()
+        self.waypoints = self.load_waypoints()
 
     def nav_status_callback(self, msg):
         self.nav_status = msg.data
@@ -59,28 +63,103 @@ class WaiterExecutive(Node):
 
     def take_order(self):
         print_menu()
-        try:
-            item = int(input(f"{GREEN}Enter menu item number: {RESET}"))
-            if item == 5:
-                print(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Goodbye! Come back soon.\"\n")
-                return False
-            if item not in (1, 2, 3, 4):
-                print(f"{GOLD}Invalid item. Please enter 1-5.{RESET}")
-                time.sleep(1.0)
-                return True
+        food_text = input(f"{GREEN}Food item: {RESET}").strip().lower()
+        if food_text in ("exit", "quit", "5"):
+            print(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Goodbye! Come back soon.\"\n")
+            return False
 
-            qty = int(input(f"{BOLD}{CYAN}Waiter:{RESET} \"Excellent choice! How many?\": "))
-            print(f"{BOLD}{CYAN}Waiter:{RESET} \"Great! I'll get that for you right away.\"")
+        water_text = input(f"{GREEN}Water? [y/n]: {RESET}").strip().lower()
+        if water_text in ("exit", "quit"):
+            print(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Goodbye! Come back soon.\"\n")
+            return False
 
-            self.order_pub.publish(Int32MultiArray(data=[item, qty]))
-            self.pending_pickup = "water_station" if item == 1 else "kitchen"
-            self.send_nav_goal(self.pending_pickup)
-            self.state = "GOING_TO_PICKUP"
-            return True
-        except ValueError:
-            print(f"{GOLD}Invalid input. Please enter a number.{RESET}")
+        food_item = self.parse_food_item(food_text)
+        wants_water = water_text in ("y", "yes", "water", "1")
+        if food_item is None and not wants_water:
+            print(f"{GOLD}No items selected. Please order food, water, or exit.{RESET}")
             time.sleep(1.0)
             return True
+
+        if food_item is not None:
+            qty = self.prompt_quantity(food_item)
+            if qty is None:
+                return True
+            self.order_pub.publish(Int32MultiArray(data=[food_item, qty]))
+
+        pickup_stops = []
+        if food_item is not None:
+            pickup_stops.append("kitchen")
+        if wants_water:
+            pickup_stops.append("water_station")
+
+        pickup_stops = self.order_pickup_stops(pickup_stops)
+        self.pickup_stops = set(pickup_stops)
+        self.route_queue = pickup_stops + ["table", "kitchen"]
+
+        print(f"{BOLD}{CYAN}Waiter:{RESET} \"Great! I'll get that for you right away.\"")
+        print(f"{BOLD}[ROUTE]{RESET} {' -> '.join(self.route_queue)}")
+        self.send_next_goal()
+        return True
+
+    def prompt_quantity(self, item):
+        try:
+            return int(input(f"{BOLD}{CYAN}Waiter:{RESET} \"How many {self.item_name(item)}?\": "))
+        except ValueError:
+            print(f"{GOLD}Invalid quantity. Please enter a number.{RESET}")
+            time.sleep(1.0)
+            return None
+
+    @staticmethod
+    def parse_food_item(food_text):
+        food_items = {
+            "none": None,
+            "no": None,
+            "": None,
+            "burger": 2,
+            "2": 2,
+            "fries": 3,
+            "3": 3,
+            "shake": 4,
+            "4": 4,
+        }
+        return food_items.get(food_text)
+
+    @staticmethod
+    def item_name(item):
+        return {2: "burger", 3: "fries", 4: "shake"}.get(item, "item")
+
+    def order_pickup_stops(self, pickup_stops):
+        if len(pickup_stops) < 2:
+            return pickup_stops
+
+        candidates = [
+            pickup_stops,
+            list(reversed(pickup_stops)),
+        ]
+        return min(candidates, key=self.route_length_to_table)
+
+    def route_length_to_table(self, pickup_stops):
+        route = [self.current_location] + pickup_stops + ["table"]
+        return sum(
+            self.waypoint_distance(route[index], route[index + 1])
+            for index in range(len(route) - 1)
+        )
+
+    def waypoint_distance(self, start, goal):
+        if start not in self.waypoints or goal not in self.waypoints:
+            return 0.0
+        start_x, start_y = self.waypoints[start]
+        goal_x, goal_y = self.waypoints[goal]
+        return math.hypot(goal_x - start_x, goal_y - start_y)
+
+    def send_next_goal(self):
+        if not self.route_queue:
+            self.state = "TAKING_ORDER"
+            return
+
+        next_goal = self.route_queue.pop(0)
+        self.send_nav_goal(next_goal)
+        self.state = "GOING_TO_WAYPOINT"
 
     def run_robot(self):
         while rclpy.ok():
@@ -88,25 +167,73 @@ class WaiterExecutive(Node):
                 if not self.take_order():
                     break
 
-            elif self.state == "GOING_TO_PICKUP":
+            elif self.state == "GOING_TO_WAYPOINT":
                 if self.navigation_arrived():
-                    print(f"{BOLD}[STATUS]{RESET} Arrived at {self.pending_pickup}. Loading...")
-                    self.state = "WAITING_AT_PICKUP"
-                    self.pickup_start_time = time.time()
+                    self.current_location = self.current_target
+                    self.handle_arrival()
 
-            elif self.state == "WAITING_AT_PICKUP":
-                if time.time() - self.pickup_start_time >= 5.0:
-                    self.send_nav_goal("table")
-                    self.state = "GOING_TO_TABLE"
-                    print(f"{BOLD}[STATUS]{RESET} Delivering to table...")
-
-            elif self.state == "GOING_TO_TABLE":
-                if self.navigation_arrived():
-                    print(f"{BOLD}[STATUS]{RESET} Order delivered.")
-                    time.sleep(3.0)
-                    self.state = "TAKING_ORDER"
+            elif self.state == "WAITING":
+                if time.time() - self.wait_start_time >= self.wait_duration:
+                    self.send_next_goal()
 
             time.sleep(0.1)
+
+    def handle_arrival(self):
+        if self.current_location in self.pickup_stops:
+            print(f"{BOLD}[STATUS]{RESET} Arrived at {self.current_location}. Loading...")
+            self.pickup_stops.remove(self.current_location)
+            self.wait_at_stop(5.0)
+        elif self.current_location == "table":
+            print(f"{BOLD}[STATUS]{RESET} Order delivered. Returning to kitchen...")
+            self.wait_at_stop(3.0)
+        elif self.current_location == "kitchen" and not self.route_queue:
+            print(f"{BOLD}[STATUS]{RESET} Returned to kitchen. Ready for next order.")
+            time.sleep(1.0)
+            self.state = "TAKING_ORDER"
+        else:
+            self.send_next_goal()
+
+    def wait_at_stop(self, duration):
+        self.wait_start_time = time.time()
+        self.wait_duration = duration
+        self.state = "WAITING"
+
+    @staticmethod
+    def load_waypoints():
+        try:
+            package_share = Path(get_package_share_directory("restaurant_mapping"))
+            waypoint_path = package_share / "config" / "waypoints.yaml"
+        except Exception:
+            return {}
+
+        waypoints = {}
+        current_name = None
+        current_entry = {}
+        with waypoint_path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                stripped = raw_line.strip()
+                if not stripped or stripped.startswith("#") or stripped == "waypoints:":
+                    continue
+
+                indent = len(raw_line) - len(raw_line.lstrip(" "))
+                if indent == 2 and stripped.endswith(":"):
+                    if current_name is not None:
+                        waypoints[current_name] = (
+                            float(current_entry["x"]),
+                            float(current_entry["y"]),
+                        )
+                    current_name = stripped[:-1]
+                    current_entry = {}
+                elif indent == 4 and ":" in stripped:
+                    key, value = stripped.split(":", 1)
+                    current_entry[key.strip()] = value.strip()
+
+        if current_name is not None:
+            waypoints[current_name] = (
+                float(current_entry["x"]),
+                float(current_entry["y"]),
+            )
+        return waypoints
 
 
 def main(args=None):
