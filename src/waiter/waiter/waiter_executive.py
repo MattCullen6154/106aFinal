@@ -103,7 +103,7 @@ class WaiterExecutive(Node):
 
     def prompt_quantity(self, item):
         try:
-            return int(input(f"{BOLD}{CYAN}Waiter:{RESET} \"How many {self.item_name(item)}?\": "))
+            return int(input(f"{BOLD}{CYAN}Waiter:{RESET} \"How many {self.item_name(item)}s would you like?\": "))
         except ValueError:
             print(f"{GOLD}Invalid quantity. Please enter a number.{RESET}")
             time.sleep(1.0)
