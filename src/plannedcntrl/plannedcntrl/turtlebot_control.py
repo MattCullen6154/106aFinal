@@ -17,6 +17,7 @@ class TurtleBotController(Node):
         self.declare_parameter("path_topic", "/planned_path")
         self.declare_parameter("status_topic", "/nav_status")
         self.declare_parameter("cmd_vel_topic", "/cmd_vel")
+<<<<<<< Updated upstream
         self.declare_parameter("obstacle_hold_topic", "/obstacle_hold")
         self.declare_parameter("robot_frame", "base_footprint")
         self.declare_parameter("position_tolerance", 0.22)
@@ -25,6 +26,15 @@ class TurtleBotController(Node):
         self.declare_parameter("angular_gain", 0.2)
         self.declare_parameter("max_linear_speed", 0.15)
         self.declare_parameter("max_angular_speed", 0.18)
+=======
+        self.declare_parameter("robot_frame", "base_link")
+        self.declare_parameter("position_tolerance", 0.3)
+        self.declare_parameter("goal_tolerance", 0.25)
+        self.declare_parameter("linear_gain", 0.25)
+        self.declare_parameter("angular_gain", 0.5)
+        self.declare_parameter("max_linear_speed", 0.4)
+        self.declare_parameter("max_angular_speed", 0.4)
+>>>>>>> Stashed changes
 
         self.path_topic = self.get_parameter("path_topic").value
         self.status_topic = self.get_parameter("status_topic").value
@@ -127,11 +137,12 @@ class TurtleBotController(Node):
         cmd = Twist()
 
         if abs(heading_error) < 1.0:
-            cmd.linear.x = self.clamp(
+            computed_speed = self.clamp(
                 self.linear_gain * distance,
                 -self.max_linear_speed,
                 self.max_linear_speed,
             )
+            cmd.linear.x = max(computed_speed, 0.04) #added min speed
         cmd.angular.z = self.clamp(
             self.angular_gain * heading_error,
             -self.max_angular_speed,
