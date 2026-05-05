@@ -142,6 +142,7 @@ class LeePlanner(Node):
             self.publish_planning_grid(coarse_grid, msg)
             return
 
+        path = self.simplify_line_of_sight(path, coarse_grid)
         self.publish_planning_grid(coarse_grid, msg)
         self.publish_path(path, msg)
 
@@ -282,6 +283,55 @@ class LeePlanner(Node):
                 queue.append(nbr)
 
         return []
+
+    def simplify_line_of_sight(self, path, coarse_grid):
+        if len(path) <= 2:
+            return path
+
+        simplified = [path[0]]
+        current_index = 0
+
+        while current_index < len(path) - 1:
+            next_index = len(path) - 1
+            while next_index > current_index + 1:
+                if self.line_is_clear(path[current_index], path[next_index], coarse_grid):
+                    break
+                next_index -= 1
+
+            simplified.append(path[next_index])
+            current_index = next_index
+
+        return simplified
+
+    def line_is_clear(self, start, goal, coarse_grid):
+        for row, col in self.bresenham_cells(start[0], start[1], goal[0], goal[1]):
+            if not self.is_free(row, col, coarse_grid):
+                return False
+        return True
+
+    @staticmethod
+    def bresenham_cells(row0, col0, row1, col1):
+        cells = []
+        d_col = abs(col1 - col0)
+        d_row = abs(row1 - row0)
+        step_col = 1 if col0 < col1 else -1
+        step_row = 1 if row0 < row1 else -1
+        error = d_col - d_row
+
+        row = row0
+        col = col0
+        while True:
+            cells.append((row, col))
+            if row == row1 and col == col1:
+                return cells
+
+            error2 = 2 * error
+            if error2 > -d_row:
+                error -= d_row
+                col += step_col
+            if error2 < d_col:
+                error += d_col
+                row += step_row
 
     @staticmethod
     def neighbors(row, col):
