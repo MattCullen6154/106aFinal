@@ -4,7 +4,7 @@
   <name>plannedcntrl</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="eugene1862@gmail.com">ee106a-tak</maintainer>
+  <maintainer email="khanhha867@berkeley.edu">ha</maintainer>
   <license>TODO: License declaration</license>
 
   <depend>rclpy</depend>
