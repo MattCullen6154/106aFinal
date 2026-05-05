@@ -4,11 +4,14 @@
   <name>perception</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="danielmunicio360@gmail.com">daniel</maintainer>
+  <maintainer email="khanhha867@berkeley.edu">ha</maintainer>
   <license>TODO: License declaration</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>vision_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>python3-matplotlib</exec_depend>
