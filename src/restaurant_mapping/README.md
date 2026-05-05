@@ -26,11 +26,21 @@ The node publishes:
 - `/planned_path`: Lee path between named waypoints
 - `/nav_goal_waypoint`: waypoint-name command input for the planner
 
+
 Run after building and sourcing the ROS workspace:
 
-```bash
 ros2 launch restaurant_mapping mapping.launch.py
-```
+ros2 run plannedcntrl turtlebot_control
+ros2 run waiter waiter_executive
+
+IN RViz display:
+TF  
+MAP            /static_map       - map saved from slam
+MAP            /dynamic_map      - map showing robot's lidar vision
+MAP            /planning_grid    - the occupancy grid
+MARKER ARRAY   /waypoint_markers - points of interest
+MARKER         /map_vis          - obstacles detected by lidar
+PATH           /planned_path     - simplified path of robot around obstacles
 
 The Lee planner uses `block_size = 7` by default. With the Lab 4 map's
 `0.05 m` resolution, each planning square is about `0.35 m x 0.35 m`.
