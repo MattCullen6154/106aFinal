@@ -51,74 +51,105 @@ class CameraPerceptionNode(Node):
 
         self.image_sub = self.create_subscription(Image, '/image_raw', self.image_callback, 1)
         self.camera_info_sub = self.create_subscription(CameraInfo, '/camera_info', self.camera_info_callback, 1)
-        self.cone_position_pub = self.create_publisher(PointStamped, '/goal_point', 1)
+        self.obstacle_position_pub = self.create_publisher(PointStamped, '/obstacle_point', 1)
+        self.hold_pub = self.create_publisher(Bool, '/obstacle_hold', 1)
         self.camera_intrinsics = None
 
-        self.get_logger().info('Image Subscriber Node initialized')
+        self.get_logger().info('Camera Perception Node initialized')
 
     def image_callback(self, msg):
+        """Process each frame: detect obstacles, estimate depth, publish."""
         if self.camera_intrinsics is None:
             return
 
         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
         results = self.model(cv_image, verbose=False)
 
+        fx = self.camera_intrinsics['fx']
+        fy = self.camera_intrinsics['fy']
+        cx = self.camera_intrinsics['cx']
+        cy = self.camera_intrinsics['cy']
+
+        closest_distance = float('inf')
+        closest_point_base = None
+
         for result in results:
             if result.masks is not None:
-                masks = result.masks.data.cpu().numpy()
+                continue
+            masks = result.masks.data.cpu().numpy()
+            classes = result.boxes.cls.cpu().numpy().astype(int)
 
-                img_height, img_width = cv_image.shape[:2]
-
-                fx = self.camera_intrinsics['fx']
-                fy = self.camera_intrinsics['fy']
-                cx = self.camera_intrinsics['cx']
-                cy = self.camera_intrinsics['cy']
-
-                for i, mask in enumerate(masks):
-
-                    # TODO: Get number of pixels in mask
-                    pixel_count = np.sum(mask > 0) 
+            for i, (mask, cls_id) in enumerate(zip(masks, classes)):
+                # Only react to the obstacle classes defined above
+                if cls_id not in OBSTACLE_CLASSES:
+                    continue
+                # Depth estimation from mask area
+                pixel_count = np.sum(mask > 0)
+                if pixel_count == 0:
+                    continue
 
                     CONE_AREA = 0.0208227849
 
-                    # TODO: Get depth of image 
-                    depth = np.sqrt(fx * fy * CONE_AREA / pixel_count)
+                real_area = OBSTACLE_AREA.get(cls_id, DEFAULT_OBSTACLE_AREA)
+                depth = np.sqrt(fx * fy * real_area / pixel_count)
+ 
+                cls_name = self.model.names.get(cls_id, str(cls_id))
+                self.get_logger().info(f'Obstacle {i + 1} ({cls_name}): depth={depth:.3f} m')
+                
+                # Image-plane centroid of the mask
+                ys, xs = np.where(mask > 0)
+                u, v = np.mean(xs), np.mean(ys)
 
-                    self.get_logger().info(f'Cone {i+1}: depth={depth:.3f}m')
+                # Back-project to 3-D camera coordinates
+                X = (u - cx) * depth / fx
+                Y = (v - cy) * depth / fy
+                Z = depth
 
+                # Convert to turtlebot frame
+                # Camera is mounted on the robot without a dedicated TF frame,
+                # so we apply the fixed camera-to-base_link transform directly.
+                G = np.array([[0, 0, 1, 0.115],
+                    [-1, 0, 0, 0],
+                    [0, -1, 0, 0],
+                    [0, 0, 0, 1]])
+                goal_point = (G @ np.array([X, Y, Z, 1]).reshape(4, 1)).flatten()
 
-                    # TODO: Get u, and v of cone in image coordinates
-                    ys, xs = np.where(mask > 0)
-                    u, v = np.mean(xs), np.mean(ys)
-
-                    # TODO: Find X , Y , Z of cone
-                    X = (u - cx) * depth / fx
-                    Y = (v - cy) * depth / fy
-                    Z = depth
-
-                    # Convert to turtlebot frame
-                    # There's no camera frame for the turtlebots, so we just do this instead 
-                    G = np.array([[0, 0, 1, 0.115],
-                      [-1, 0, 0, 0],
-                      [0, -1, 0, 0],
-                      [0, 0, 0, 1]])
-                    goal_point = (G @ np.array([X, Y, Z, 1]).reshape(4, 1)).flatten()
-
-                    point_cam = PointStamped()
-                    point_cam.header.stamp = msg.header.stamp
-                    point_cam.header.frame_id = 'base_link'
-                    point_cam.point.x = goal_point[0]
-                    point_cam.point.y = goal_point[1]
-                    point_cam.point.z = goal_point[2]
-                    self.cone_position_pub.publish(point_cam)
-            else:
-                self.get_logger().info('No cones spotted')
+                   # Track the nearest obstacle to decide on hold command
+                if depth < closest_distance:
+                    closest_distance = depth
+                    closest_point_base = goal_point
+ 
+        # Publish results
+        hold_msg = Bool()
+ 
+        if closest_point_base is not None:
+            # Publish 3-D position of the nearest obstacle
+            point_msg = PointStamped()
+            point_msg.header.stamp = msg.header.stamp
+            point_msg.header.frame_id = 'base_link'
+            point_msg.point.x = float(closest_point_base[0])
+            point_msg.point.y = float(closest_point_base[1])
+            point_msg.point.z = float(closest_point_base[2])
+            self.obstacle_position_pub.publish(point_msg)
+ 
+            # Command a hold if the obstacle is within the safety threshold
+            hold_msg.data = closest_distance < HOLD_DISTANCE_THRESHOLD
+            if hold_msg.data:
+                self.get_logger().warn(
+                    f'Obstacle within {HOLD_DISTANCE_THRESHOLD} m '
+                    f'({closest_distance:.2f} m) — publishing HOLD'
+                )
+        else:
+            # No relevant obstacles detected — path is clear
+            hold_msg.data = False
+            self.get_logger().info('No obstacles detected — path clear')
+ 
+        self.hold_pub.publish(hold_msg)
+ 
 
 
     def camera_info_callback(self, msg):
-        # -------------------------------------------
-        # TODO: Extract camera intrinsic parameters! 
-        # -------------------------------------------
+        # Extract and cache camera intrinsic parameters from CameraInfo
         self.get_logger().info("Recieved Camera Info")
         K = msg.k
         fx = K[0]
@@ -133,8 +164,8 @@ class CameraPerceptionNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    image_subscriber = ImageSubscriber()
-    rclpy.spin(image_subscriber)
+    image_subscriber = CameraPerceptionNode()
+    rclpy.spin(camera_perception)
     rclpy.shutdown()
 
 if __name__ == '__main__':
