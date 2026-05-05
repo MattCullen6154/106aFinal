@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'turtlebot_control = plannedcntrl.turtlebot_control:main'
+            'turtlebot_control = plannedcntrl.turtlebot_control:main',
+            'trajectory = plannedcntrl.trajectory:main',
         ],
     },
 )
