@@ -63,7 +63,7 @@ class WaiterExecutive(Node):
 
     def take_order(self):
         print_menu()
-        food_text = input(f"{GREEN}Food item: {RESET}").strip().lower()
+        food_text = input(f"{GREEN}Welcome to the Toasted Turtle, what will you be having to eat today?: {RESET}").strip().lower()
         if food_text in ("exit", "quit", "5"):
             print(f"\n{BOLD}{CYAN}Waiter:{RESET} \"Goodbye! Come back soon.\"\n")
             return False
