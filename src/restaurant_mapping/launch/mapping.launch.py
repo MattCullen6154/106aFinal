@@ -68,8 +68,8 @@ def generate_launch_description():
                         "plan_on_start": False,
                         "robot_frame": "base_link",
                         "block_size": 7,
-                        "occupied_fraction_threshold": 0.1,
-                        "inflation_radius": 0.05,
+                        "occupied_fraction_threshold": 0.02,
+                        "inflation_radius": 0.2,
                         "treat_unknown_as_occupied": False,
                     }
                 ],

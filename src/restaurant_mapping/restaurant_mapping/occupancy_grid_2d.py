@@ -52,7 +52,7 @@ class OccupancyGrid2d(Node):
         self.declare_parameter("topics/vis", "/map_vis")
         self.declare_parameter("frames/sensor", "base_scan")
         self.declare_parameter("frames/fixed", "map")
-        self.declare_parameter("publish_period", 1.0)
+        self.declare_parameter("publish_period", 0.5)
         self.declare_parameter("max_range", 3.5)
 
         self._map_yaml = self.get_parameter("map_yaml").value
