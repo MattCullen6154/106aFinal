@@ -5,9 +5,9 @@ import tf2_ros
 import numpy as np
 import matplotlib.pyplot as plt
 import transforms3d.euler as euler
-from geometry_msgs.msg import TransformStamped
 
 
+# Visualization
 def plot_trajectory(waypoints):
     x_vals = [p[0] for p in waypoints]
     y_vals = [p[1] for p in waypoints]
@@ -27,6 +27,7 @@ def plot_trajectory(waypoints):
     plt.show()
 
 
+# Bézier primitives
 def bezier_curve(p0, p1, p2, p3, t):
     """Cubic Bézier interpolation between 4 control points."""
     return (1 - t)**3 * p0 + 3*(1 - t)**2*t*p1 + 3*(1 - t)*t**2*p2 + t**3*p3
@@ -50,9 +51,9 @@ def generate_bezier_waypoints(x1, y1, theta1, x2, y2, theta2, offset=1.0, num_po
     return [(pts[i][0], pts[i][1], thetas[i]) for i in range(len(pts))]
 
 
-def plan_curved_trajectory(target_position):
+def plan_curved_trajectory(target_position, offset=0.4, num_points=50):
     """Plan a curved trajectory from current odom→base_footprint transform."""
-    node = rclpy.create_node('turtlebot_controller')
+    node = rclpy.create_node('trajectory_planner')
     tf_buffer = tf2_ros.Buffer()
     tf_listener = tf2_ros.TransformListener(tf_buffer, node)
 
@@ -63,7 +64,7 @@ def plan_curved_trajectory(target_position):
                 'odom',
                 'base_footprint',
                 rclpy.time.Time()
-            ) ## TODO: Apply a lookup transform from our world frame to the turtlebot frame
+            )
             break
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             node.get_logger().warn('TF lookup failed, retrying...')
@@ -80,11 +81,11 @@ def plan_curved_trajectory(target_position):
     # Compute absolute target position in odom frame
     dx = target_position[0]
     dy = target_position[1]
-    x2 = x1 + dx * np.cos(yaw) - dy * np.sin(yaw) ## TODO: How would you get x2 from our target position? Remember this is relative to x1
-    y2 = y1 + dx * np.sin(yaw) + dy * np.cos(yaw) ## TODO: How would you get y2 from our target position? Remember this is relative to y1
+    x2 = x1 + dx * np.cos(yaw) - dy * np.sin(yaw)
+    y2 = y1 + dx * np.sin(yaw) + dy * np.cos(yaw)
 
     # Generate Bézier waypoints and visualize
-    waypoints = generate_bezier_waypoints(x1, y1, yaw, x2, y2, yaw, offset=0.2, num_points=10)
+    waypoints = generate_bezier_waypoints(x1, y1, yaw, x2, y2, yaw, offset=offset, num_points=num_points)
     plot_trajectory(waypoints)
 
     node.destroy_node()
@@ -94,14 +95,18 @@ def plan_curved_trajectory(target_position):
 def main(args=None):
     rclpy.init(args=args)
 
-    # Example: test without TF (offline)
-    waypoints = generate_bezier_waypoints(0.0, 0.0, np.pi/2,
-                                          0.2, 0.2, np.pi/2,
-                                          offset=0.2, num_points=100)
+    print('Plotting test trajectory: kitchen → dining table')
+    waypoints = generate_bezier_waypoints(
+        0.0, 0.0, 0.0,       # start: kitchen (origin, facing +x)
+        1.5, 0.5, 0.0,       # goal:  dining table
+        offset=0.4,
+        num_points=100,
+    )
     plot_trajectory(waypoints)
 
-    # Example: with live TF
-    # plan_curved_trajectory((0.2, 0.2))
+    # To test with a live robot, comment the block above and uncomment below:
+    # waypoints = plan_curved_trajectory((1.5, 0.5), offset=0.4, num_points=50)
+    # plot_trajectory(waypoints)
 
     rclpy.shutdown()
 
