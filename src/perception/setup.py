@@ -11,12 +11,12 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/utilities',
-            ['perception/utilities/segment_bounding_box_cones.pt']),
+            ['perception/utilities/yolov8n-seg.pt']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='daniel',
-    maintainer_email='danielmunicio360@gmail.com',
+    maintainer='ha',
+    maintainer_email='khanhha867@berkeley.edu',
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
@@ -26,7 +26,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'cone_publisher = perception.cone_publisher:main',
+            'camera_perception = perception.camera_perception:main',
         ],
     },
 )
