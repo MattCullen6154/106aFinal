@@ -52,7 +52,7 @@ def generate_bezier_waypoints(x1, y1, theta1, x2, y2, theta2, offset=1.0, num_po
 
 
 def plan_curved_trajectory(target_position, offset=0.4, num_points=50):
-    """Plan a curved trajectory from current odom→base_footprint transform."""
+    """Plan a curved trajectory from current odom→base_link transform."""
     node = rclpy.create_node('trajectory_planner')
     tf_buffer = tf2_ros.Buffer()
     tf_listener = tf2_ros.TransformListener(tf_buffer, node)
@@ -62,7 +62,7 @@ def plan_curved_trajectory(target_position, offset=0.4, num_points=50):
         try:
             trans = tf_buffer.lookup_transform(
                 'odom',
-                'base_footprint',
+                'base_link',
                 rclpy.time.Time()
             )
             break

@@ -36,7 +36,7 @@ class LeePlanner(Node):
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("block_size", 7)
         self.declare_parameter("occupied_fraction_threshold", 0.1)
-        self.declare_parameter("inflation_radius", 0.15)
+        self.declare_parameter("inflation_radius", 0.05)
         self.declare_parameter("treat_unknown_as_occupied", False)
 
         self.map_topic = self.get_parameter("map_topic").value
@@ -91,6 +91,7 @@ class LeePlanner(Node):
             )
             return
 
+        self.start_waypoint = self.goal_waypoint # When a new goal is received, treat the old goal as the new start
         self.goal_waypoint = waypoint_name
         self.start_mode = "robot"
         self.has_goal = True

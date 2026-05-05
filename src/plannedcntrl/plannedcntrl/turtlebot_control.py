@@ -18,7 +18,7 @@ class TurtleBotController(Node):
         self.declare_parameter("status_topic", "/nav_status")
         self.declare_parameter("cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("obstacle_hold_topic", "/obstacle_hold")
-        self.declare_parameter("robot_frame", "base_footprint")
+        self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("position_tolerance", 0.22)
         self.declare_parameter("goal_tolerance", 0.3)
         self.declare_parameter("linear_gain", 0.35)
