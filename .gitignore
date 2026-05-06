@@ -1,47 +1,7 @@
-# Colcon Build Artifacts
 build/
 install/
 log/
-
-# Colcon Markers (prevents colcon from indexing the folder)
-COLCON_IGNORE
-AMENT_IGNORE
-
-# Python-specific
 __pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-nosetests.xml
-coverage.xml
-*.egg-info/
-
-# C++ / CMake
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-Makefile
-cmake_install.cmake
-install_manifest.txt
-*.o
-*.obj
-
-# Editor-specific
-.vscode/
-.idea/
-*.swp
-*~
-.project
-.cproject
-CMakeLists.txt.user
-
-# OS-specific
+*.pyc
+*.pyo
 .DS_Store
-Thumbs.db
-
-# Large Data / Bag files
-*.mcap
-*.db3
-*.bag.env
-ssh-key-final.txt
-.env
