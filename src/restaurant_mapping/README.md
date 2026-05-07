@@ -7,13 +7,13 @@ Small mapping package built around two lab ideas:
 
 The map YAML is the coordinate contract. `map_loader.py` reads its image, resolution, origin, and thresholds. `occupancy_grid_2d.py` then uses those values to set the grid bounds:
 
-```text
+
 x_min = origin_x
 y_min = origin_y
 x_num = image_width
 y_num = image_height
 resolution = yaml resolution
-```
+
 
 The node publishes:
 

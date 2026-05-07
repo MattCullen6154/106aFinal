@@ -26,7 +26,7 @@ def generate_launch_description():
                         "frames/sensor": "base_scan",
                         "frames/fixed": "map",
                         "random_downsample": 0.1,
-                        "publish_period": 1.0,
+                        "publish_period": 0.25,
                         "max_range": 3.5,
                     }
                 ],
@@ -39,7 +39,7 @@ def generate_launch_description():
                 arguments=[
                 
                      "-0.55",
-                    "-2.6",
+                    "-2.9",
                     "0.0",
                     ".7",
                     "0.0",
