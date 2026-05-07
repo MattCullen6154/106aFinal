@@ -10,6 +10,6 @@ waypoints:
     yaw: 0.0
 
   water_station:
-    x: -1.0
+    x: 0.0
     y: -5
     yaw: 0.0
