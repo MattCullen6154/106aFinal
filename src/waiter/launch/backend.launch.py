@@ -26,5 +26,11 @@ def generate_launch_description():
                 name="turtlebot_control",
                 output="screen",
             ),
+            Node(
+                package="perception",
+                executable="camera_perception",
+                name="camera_perception",
+                output="screen",
+            ),
         ]
     )
