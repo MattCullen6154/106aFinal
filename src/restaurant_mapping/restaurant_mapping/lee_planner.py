@@ -9,7 +9,7 @@ from nav_msgs.msg import OccupancyGrid, Path as PathMsg
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 import tf2_ros
 from visualization_msgs.msg import Marker, MarkerArray
 

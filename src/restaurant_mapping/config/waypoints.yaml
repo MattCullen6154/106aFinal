@@ -1,5 +1,5 @@
 waypoints:
-  table:
+  water_station:
     x: 1.
     y: -3
     yaw: 0.0
@@ -9,7 +9,7 @@ waypoints:
     y: -3.0
     yaw: 0.0
 
-  water_station:
+  table:
     x: 0.0
     y: -5
     yaw: 0.0
