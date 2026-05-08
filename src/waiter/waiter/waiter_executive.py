@@ -54,7 +54,9 @@ class WaiterExecutive(Node):
 
     def send_nav_goal(self, waypoint_name):
         self.current_target = waypoint_name
-        self.nav_status = "requested"
+        # FIX: reset to "moving" — controller never publishes "requested"
+        # so stale "arrived" from previous leg would skip the next trip
+        self.nav_status = "moving"
         self.nav_goal_pub.publish(String(data=waypoint_name))
         print(f"{BOLD}[NAV]{RESET} Sent goal: {waypoint_name}")
 
