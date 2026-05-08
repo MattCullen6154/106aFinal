@@ -25,10 +25,10 @@ OBSTACLE_AREA = {
     60: 0.80,   # dining table
     63: 0.04,   # laptop
 }
-DEFAULT_OBSTACLE_AREA = 0.25  # fallback for any unlisted class
+DEFAULT_OBSTACLE_AREA = 0.03  # fallback for any unlisted class
  
-# If the closest detected obstacle is within this distance (metres), command a hold.
-HOLD_DISTANCE_THRESHOLD = 1.2
+# If the closest detected obstacle is within this distance (meters), command a hold.
+HOLD_DISTANCE_THRESHOLD = 0.5
 
 class CameraPerceptionNode(Node):
     """
@@ -114,7 +114,7 @@ class CameraPerceptionNode(Node):
                     [0, 0, 0, 1]])
                 goal_point = (G @ np.array([X, Y, Z, 1]).reshape(4, 1)).flatten()
 
-                   # Track the nearest obstacle to decide on hold command
+                # Track the nearest obstacle to decide on hold command
                 if depth < closest_distance:
                     closest_distance = depth
                     closest_point_base = goal_point
