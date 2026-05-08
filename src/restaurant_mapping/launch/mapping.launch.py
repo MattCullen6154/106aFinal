@@ -69,7 +69,7 @@ def generate_launch_description():
                         "robot_frame": "base_link",
                         "block_size": 7,
                         "occupied_fraction_threshold": 0.05,
-                        "inflation_radius": 0.1,
+                        "inflation_radius": 0.25,   # in meters, should be slightly larger than the robot's radius
                         "treat_unknown_as_occupied": False,
                     }
                 ],
