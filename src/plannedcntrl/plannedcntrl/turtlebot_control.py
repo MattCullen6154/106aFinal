@@ -2,12 +2,12 @@
 
 import math
 
+import rclpy
+import tf2_ros
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Path
-import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
-import tf2_ros
 
 
 class TurtleBotController(Node):
@@ -26,7 +26,6 @@ class TurtleBotController(Node):
         self.declare_parameter("max_linear_speed", 0.15)
         self.declare_parameter("max_angular_speed", 0.18)
 
-
         self.path_topic = self.get_parameter("path_topic").value
         self.status_topic = self.get_parameter("status_topic").value
         self.cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
@@ -42,7 +41,9 @@ class TurtleBotController(Node):
         self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.status_pub = self.create_publisher(String, self.status_topic, 10)
         self.create_subscription(Path, self.path_topic, self.path_callback, 10)
-        self.create_subscription(Bool, self.obstacle_hold_topic, self.obstacle_hold_callback, 10)
+        self.create_subscription(
+            Bool, self.obstacle_hold_topic, self.obstacle_hold_callback, 10
+        )
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -51,10 +52,12 @@ class TurtleBotController(Node):
         self.path_points = []
         self.path_index = 0
         self.arrival_reported = True
-        self.obstacle_hold   = False  # set by /obstacle_hold subscriber
+        self.obstacle_hold = False  # set by /obstacle_hold subscriber
 
         self.create_timer(0.1, self.control_loop)
-        self.get_logger().info("TurtleBot path controller listening on %s" % self.path_topic)
+        self.get_logger().info(
+            "TurtleBot path controller listening on %s" % self.path_topic
+        )
 
     def path_callback(self, msg):
         if not msg.poses:
@@ -80,18 +83,20 @@ class TurtleBotController(Node):
             # Transition: clear → hold
             self.stop_robot()
             self.publish_status("holding")
-            self.get_logger().warn("Obstacle detected — holding position until path is clear.")
+            self.get_logger().warn(
+                "Obstacle detected — holding position until path is clear."
+            )
         elif not msg.data and self.obstacle_hold:
             # Transition: hold → clear
             self.publish_status("moving")
             self.get_logger().info("Path clear — resuming navigation.")
- 
+
         self.obstacle_hold = msg.data
 
     def control_loop(self):
         if not self.path_points:
             return
-        
+
         # Pause motion while an obstacle is blocking the path.
         # The robot stays stopped until the perception node clears the hold.
         if self.obstacle_hold:
@@ -116,7 +121,10 @@ class TurtleBotController(Node):
                 if not self.arrival_reported:
                     self.publish_status("arrived")
                     self.arrival_reported = True
-                    self.get_logger().info("Arrived at planned path goal within %.2fm." % self.goal_tolerance)
+                    self.get_logger().info(
+                        "Arrived at planned path goal within %.2fm."
+                        % self.goal_tolerance
+                    )
             return
 
         heading = math.atan2(dy, dx)
@@ -133,7 +141,7 @@ class TurtleBotController(Node):
                 -self.max_linear_speed,
                 self.max_linear_speed,
             )
-            cmd.linear.x = max(computed_speed, 0.04) #added min speed
+            cmd.linear.x = max(computed_speed, 0.04)  # added min speed
         cmd.angular.z = self.clamp(
             self.angular_gain * heading_error,
             -self.max_angular_speed,

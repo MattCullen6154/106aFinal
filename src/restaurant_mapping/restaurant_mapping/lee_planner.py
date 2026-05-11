@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
+import math
 from collections import deque
 from pathlib import Path
-import math
 
-from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import OccupancyGrid, Path as PathMsg
 import numpy as np
 import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String, Bool
 import tf2_ros
+from ament_index_python.packages import get_package_share_directory
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import Path as PathMsg
+from rclpy.node import Node
+from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .waypoint_loader import load_waypoints
@@ -36,7 +37,7 @@ class LeePlanner(Node):
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("block_size", 7)
         self.declare_parameter("occupied_fraction_threshold", 0.1)
-        self.declare_parameter("inflation_radius", 0.05)
+        self.declare_parameter("inflation_radius", 0.15)
         self.declare_parameter("treat_unknown_as_occupied", False)
 
         self.map_topic = self.get_parameter("map_topic").value
@@ -75,22 +76,16 @@ class LeePlanner(Node):
         self.goal_sub = self.create_subscription(
             String, self.goal_waypoint_topic, self.goal_callback, 10
         )
-        self.hold_sub = self.create_subscription(
-            Bool, "/obstacle_hold", self.obstacle_hold_callback, 10
-        )   # Subscribe to obstacle_hold so the planner can replan when an obstacle clears — handles static obstacles added after map build.
         self.create_timer(1.0, self.publish_waypoint_markers)
-
-        # replan_needed flag prevents map_callback from republishing
-        # /planned_path on every map update (which reset path_index=0 in
-        # turtlebot_control 4x/second, causing the robot to never advance).
-        self.replan_needed    = False
-        self.obstacle_held    = False
-        self.last_coarse_grid = None
-        self.last_map_msg     = None
 
         self.get_logger().info(
             "LeePlanner: start_mode=%s, start=%s, goal=%s, block_size=%d"
-            % (self.start_mode, self.start_waypoint, self.goal_waypoint, self.block_size)
+            % (
+                self.start_mode,
+                self.start_waypoint,
+                self.goal_waypoint,
+                self.block_size,
+            )
         )
 
     def goal_callback(self, msg):
@@ -102,38 +97,20 @@ class LeePlanner(Node):
             )
             return
 
-        self.start_waypoint = self.goal_waypoint # When a new goal is received, treat the old goal as the new start
         self.goal_waypoint = waypoint_name
         self.start_mode = "robot"
         self.has_goal = True
-        self.replan_needed  = True  # trigger exactly one replan on next map frame
         self.get_logger().info("New navigation goal: %s" % self.goal_waypoint)
 
-    def obstacle_hold_callback(self, msg):
-        """
-        When an obstacle clears (True → False), trigger a replan so the robot
-        gets a fresh path that avoids any newly mapped static obstacle rather
-        than resuming the old blocked path straight through it.
-        """
-        if self.obstacle_held and not msg.data and self.has_goal:
-            self.replan_needed = True
-            self.get_logger().info("Obstacle cleared — replanning path.")
-        self.obstacle_held = msg.data
-
     def map_callback(self, msg):
-        fine_grid = np.array(msg.data, dtype=np.int16).reshape(
-            (msg.info.height, msg.info.width)
-        )
-        inflated    = self.inflate_obstacles(fine_grid, msg.info.resolution)
-        coarse_grid = self.coarsen_grid(inflated)
- 
-        self.last_coarse_grid = coarse_grid
-        self.last_map_msg     = msg
-        self.publish_planning_grid(coarse_grid, msg)
- 
-        if not self.has_goal or not self.replan_needed:
+        if not self.has_goal:
+            fine_grid = np.array(msg.data, dtype=np.int16).reshape(
+                (msg.info.height, msg.info.width)
+            )
+            inflated = self.inflate_obstacles(fine_grid, msg.info.resolution)
+            self.publish_planning_grid(self.coarsen_grid(inflated), msg)
             return
- 
+
         if self.goal_waypoint not in self.waypoints:
             names = ", ".join(sorted(self.waypoints))
             self.get_logger().error(f"Unknown waypoint. Available: {names}")
@@ -142,31 +119,39 @@ class LeePlanner(Node):
             names = ", ".join(sorted(self.waypoints))
             self.get_logger().error(f"Unknown start waypoint. Available: {names}")
             return
- 
+
+        fine_grid = np.array(msg.data, dtype=np.int16).reshape(
+            (msg.info.height, msg.info.width)
+        )
+        inflated = self.inflate_obstacles(fine_grid, msg.info.resolution)
+        coarse_grid = self.coarsen_grid(inflated)
+
         start = self.start_cell(msg)
         if start is None:
+            self.publish_planning_grid(coarse_grid, msg)
             return
- 
+
         goal = self.world_to_coarse_cell(
             self.waypoints[self.goal_waypoint].x,
             self.waypoints[self.goal_waypoint].y,
             msg,
         )
- 
+
         start = self.snap_to_free(start, coarse_grid)
-        goal  = self.snap_to_free(goal,  coarse_grid)
-        path  = self.lee_search(coarse_grid, start, goal)
- 
+        goal = self.snap_to_free(goal, coarse_grid)
+        path = self.lee_search(coarse_grid, start, goal)
         if not path:
             self.get_logger().warn(
-                "No Lee path found from %s to %s" % (self.start_label(), self.goal_waypoint),
+                "No Lee path found from %s to %s"
+                % (self.start_label(), self.goal_waypoint),
                 throttle_duration_sec=2.0,
             )
+            self.publish_planning_grid(coarse_grid, msg)
             return
- 
+
         path = self.simplify_line_of_sight(path, coarse_grid)
+        self.publish_planning_grid(coarse_grid, msg)
         self.publish_path(path, msg)
-        self.replan_needed = False  # clear — do not replan until next goal or obstacle clear
 
     def start_cell(self, map_msg):
         if self.start_mode == "waypoint":
@@ -246,7 +231,9 @@ class LeePlanner(Node):
                 unknown_fraction = np.count_nonzero(block == -1) / block.size
                 blocked = occupied_fraction >= self.occupied_fraction_threshold
                 if self.treat_unknown_as_occupied:
-                    blocked = blocked or unknown_fraction >= self.occupied_fraction_threshold
+                    blocked = (
+                        blocked or unknown_fraction >= self.occupied_fraction_threshold
+                    )
 
                 coarse[coarse_row, coarse_col] = 100 if blocked else 0
 
@@ -316,7 +303,9 @@ class LeePlanner(Node):
         while current_index < len(path) - 1:
             next_index = len(path) - 1
             while next_index > current_index + 1:
-                if self.line_is_clear(path[current_index], path[next_index], coarse_grid):
+                if self.line_is_clear(
+                    path[current_index], path[next_index], coarse_grid
+                ):
                     break
                 next_index -= 1
 
